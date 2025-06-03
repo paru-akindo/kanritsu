@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-st.title("レベルアップ時刻予測シミュレーション")
+st.title("いつ段位アップ？")
 
 # 各境地・段位ごとの修練速度（1周天あたりのポイント）
 training_speeds = {
