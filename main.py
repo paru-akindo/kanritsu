@@ -34,7 +34,7 @@ herb_interval = 15 * 60     # 仙草が手に入る間隔（15分＝900秒）
 herb_cycles  = 40           # 仙草1個で補助される周天数
 
 # 霊峰バフのパターン（仙草には影響しない）
-buff_options = {"なし": 0, "30%": 0.30, "20%": 0.20, "10%": 0.10, "3%": 0.03}
+buff_options = {"30%": 0.30, "20%": 0.20, "10%": 0.10, "3%": 0.03}
 
 # シミュレーション関数：必要な秒数 t を求め、手動・仙草の修練値を返す
 def simulate_time(remaining, base_speed, buff, cycle_time, herb_interval, herb_cycles):
