@@ -83,11 +83,11 @@ if st.button("シミュレーション開始"):
             seconds = t_required % 60
             results.append({
                 "バフ": buff_label,
-                "予想到達時刻": finish_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "所要時間": f"{hours} 時間 {minutes} 分 {seconds} 秒",
-                "自動修練": int(manual_points),
-                "仙草修練": int(herb_points),
-                "合計修練": int(manual_points + herb_points)
+                "予想到達時刻": finish_time.strftime('%Y-%m-%d %H:%M'),
+                "所要時間": f"{hours} 時間 {minutes} 分",
+                "自動修練(万)": f"{int(manual_points)/10000:.2f} 万",
+                "仙草修練(万)": f"{int(herb_points)/10000:.2f} 万",
+                "合計修練(万)": f"{int(manual_points + herb_points)/10000:.2f} 万",
             })
         
         df = pd.DataFrame(results)
