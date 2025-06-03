@@ -18,15 +18,15 @@ training_speeds = {
     "大乗": {1: 3700, 2: 3800, 3: 3900, 4: 4000, 5: 4100, 6: 4200, 7: 4300, 8: 4400, 9: 4500}
 }
 
-# 現在の境地・段位の入力（手動修練の基本パラメータとなる）
-st.sidebar.header("現在の境地・段位")
-current_stage = st.sidebar.selectbox("現在の境地", list(training_speeds.keys()))
-current_rank = st.sidebar.selectbox("現在の段位", list(training_speeds[current_stage].keys()))
-
-# ここでは修練値を「万」単位で入力（内部では 10000 倍して扱います）
-st.sidebar.header("修練値入力（万単位）")
-current_value_input = st.sidebar.number_input("現在の修練値（万）", min_value=0, value=0, step=1)
-target_value_input  = st.sidebar.number_input("目標修練値（万）", min_value=1, value=1000, step=1)
+# メインエリアに入力パネルを配置（スマホでも見やすい）
+with st.expander("入力項目", expanded=True):
+    # 現在の境地・段位の入力
+    current_stage = st.selectbox("現在の境地", list(training_speeds.keys()))
+    current_rank = st.selectbox("現在の段位", list(training_speeds[current_stage].keys()))
+    
+    # 修練値は「万」単位で入力（内部では 10000 倍して扱う）
+    current_value_input = st.number_input("現在の修練値（万）", min_value=0, value=0, step=1)
+    target_value_input  = st.number_input("目標修練値（万）", min_value=1, value=1000, step=1)
 
 # 定数
 cycle_time   = 8            # 1周天に必要な秒数
