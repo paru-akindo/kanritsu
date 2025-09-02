@@ -43,7 +43,7 @@ training_speeds = {
            7: 4300, 8: 4400, 9: 4500}
 }
 
-# ── セッション状態の初期化 ──
+# ── セッション初期化 ──
 if 'current_stage' not in st.session_state:
     st.session_state.current_stage = list(required_training.keys())[0]
 if 'current_rank' not in st.session_state:
@@ -51,36 +51,29 @@ if 'current_rank' not in st.session_state:
 if 'current_value_w10k' not in st.session_state:
     st.session_state.current_value_w10k = 0
 if 'target_value_w10k' not in st.session_state:
-    # 初期は現在境地・段位の必要ポイントを万単位に変換
-    raw = required_training[st.session_state.current_stage][st.session_state.current_rank]
+    raw = required_training[ st.session_state.current_stage ][ st.session_state.current_rank ]
     st.session_state.target_value_w10k = raw // 10000
+if 'item_count' not in st.session_state:
+    st.session_state.item_count = 0
 
-# ── 境地・段位が変わったら目標値(万)を更新 ──
+# ── コールバック：境地/段位変更で目標値を更新 ──
 def update_target():
-    raw = required_training[
-        st.session_state.current_stage
-    ][
-        st.session_state.current_rank
-    ]
+    raw = required_training[ st.session_state.current_stage ][ st.session_state.current_rank ]
     st.session_state.target_value_w10k = raw // 10000
 
 with st.expander("入力項目", expanded=True):
-    # 境地選択
     st.selectbox(
         "現在の境地",
         list(required_training.keys()),
         key="current_stage",
         on_change=update_target
     )
-    # 段位選択（境地ごとに可変）
     st.selectbox(
         "現在の段位",
         list(required_training[st.session_state.current_stage].keys()),
         key="current_rank",
         on_change=update_target
     )
-
-    # 現在の修練値（万単位）
     st.number_input(
         "現在の修練値（万）",
         min_value=0,
@@ -88,8 +81,6 @@ with st.expander("入力項目", expanded=True):
         step=1,
         key="current_value_w10k"
     )
-
-    # 目標修練値（万単位、自動更新）
     st.number_input(
         "目標修練値（万）",
         min_value=0,
@@ -97,39 +88,58 @@ with st.expander("入力項目", expanded=True):
         step=1,
         key="target_value_w10k"
     )
+    st.number_input(
+        "アイテム個数 (1個→仙草3つ)",
+        min_value=0,
+        value=st.session_state.item_count,
+        step=1,
+        key="item_count"
+    )
 
-# ── シミュレーション用定数 ──
+# ── 定数 ──
 cycle_time    = 8            # 1周天に要する秒数
 herb_interval = 15 * 60      # 仙草入手間隔（秒）
 herb_cycles   = 40           # 仙草1個あたりの補助周天数
 buff_options  = {"30%": 0.30, "20%": 0.20, "10%": 0.10, "3%": 0.03}
 
-# ── シミュレーション関数 ──
-def simulate_time(remaining, base_speed, buff):
+# ── シミュレーション関数（アイテム対応） ──
+def simulate_time(remaining, base_speed, buff, init_herbs=0):
+    """
+    remaining   : 必要修練ポイント
+    base_speed  : 周天あたり獲得ポイント
+    buff        : 聖峰バフ率
+    init_herbs  : 初期仙草個数（アイテム由来）
+    戻り値      : (所要秒数, manual_pts, herb_pts)
+    """
+    # 推定
     factor = base_speed * ((1 + buff) / cycle_time + herb_cycles / herb_interval)
-    t_est = int(remaining / factor)
-    t = max(t_est, 0)
+    t_est  = int(remaining / factor)
+    t      = max(t_est, 0)
     while True:
         manual_pts = (t / cycle_time) * base_speed * (1 + buff)
-        herb_pts   = (t // herb_interval) * herb_cycles * base_speed
+        # 既存取得仙草＋時間経過で得られる仙草
+        herb_count = init_herbs + (t // herb_interval)
+        herb_pts   = herb_count * herb_cycles * base_speed
         if manual_pts + herb_pts >= remaining:
-            # 1秒前チェック
+            # 最小時間を探す
             while t > 0:
-                t_minus = t - 1
-                m2 = (t_minus / cycle_time) * base_speed * (1 + buff)
-                h2 = (t_minus // herb_interval) * herb_cycles * base_speed
+                t_minus   = t - 1
+                m2        = (t_minus / cycle_time) * base_speed * (1 + buff)
+                hcount2   = init_herbs + (t_minus // herb_interval)
+                h2        = hcount2 * herb_cycles * base_speed
                 if m2 + h2 < remaining:
                     break
                 t = t_minus
             return t, manual_pts, herb_pts
         t += 1
 
-# ── シミュレーション実行 ──
+# ── 実行 ──
 if st.button("シミュレーション開始"):
-    # 万単位→ポイント単位に変換
+    # 万→ポイント
     current = st.session_state.current_value_w10k * 10000
     target  = st.session_state.target_value_w10k * 10000
     remaining = target - current
+    items     = st.session_state.item_count
 
     if remaining <= 0:
         st.success("既に目標修練値に達しています。")
@@ -141,22 +151,34 @@ if st.button("シミュレーション開始"):
         ]
         now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
 
-        results = []
+        rows = []
         for label, buff in buff_options.items():
-            t_need, manual_pts, herb_pts = simulate_time(remaining, base_speed, buff)
-            finish = now_jst + timedelta(seconds=t_need)
-            hours   = t_need // 3600
-            mins    = (t_need % 3600) // 60
+            # アイテム未使用
+            t0, _, _ = simulate_time(remaining, base_speed, buff, init_herbs=0)
+            finish0  = now_jst + timedelta(seconds=t0)
+            h0, m0   = divmod(t0, 3600)[0], (t0 % 3600) // 60
+            time0    = f"{h0}h {m0}m"
 
-            results.append({
-                "バフ":       label,
-                "予想到達時刻": finish.strftime("%Y-%m-%d %H:%M"),
-                "所要時間":   f"{hours}h {mins}m",
-                "手動修練(万)":   f"{int(manual_pts)//10000}",
-                "仙草修練(万)":   f"{int(herb_pts)//10000}",
-                "合計修練(万)":   f"{int((manual_pts+herb_pts))//10000}",
-            })
+            row = {
+                "バフ": label,
+                "未使用 到達時刻": finish0.strftime("%Y-%m-%d %H:%M"),
+                "未使用 所要時間": time0,
+            }
 
-        df = pd.DataFrame(results)
+            # アイテム使用時
+            if items > 0:
+                init_herb_count = items * 3
+                t1, _, _       = simulate_time(remaining, base_speed, buff, init_herbs=init_herb_count)
+                finish1        = now_jst + timedelta(seconds=t1)
+                h1, m1         = divmod(t1, 3600)[0], (t1 % 3600) // 60
+                time1          = f"{h1}h {m1}m"
+                row.update({
+                    "使用時 到達時刻": finish1.strftime("%Y-%m-%d %H:%M"),
+                    "使用時 所要時間": time1,
+                })
+
+            rows.append(row)
+
+        df = pd.DataFrame(rows)
         st.markdown("### シミュレーション結果")
         st.table(df)
