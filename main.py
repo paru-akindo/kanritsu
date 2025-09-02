@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-st.title("いつ段位アップ？ (万単位入力対応)")
+st.title("いつ段位アップ？")
 
 # ── 昇段に必要な修練値マスタ（生ポイント） ──
 required_training = {
