@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-st.title("いつ段位アップ？")
+st.title("いつ段位アップ？ (万単位入力対応)")
 
 # ── 昇段に必要な修練値マスタ（生ポイント） ──
 required_training = {
@@ -48,18 +48,21 @@ if 'current_stage' not in st.session_state:
     st.session_state.current_stage = list(required_training.keys())[0]
 if 'current_rank' not in st.session_state:
     st.session_state.current_rank = list(required_training[st.session_state.current_stage].keys())[0]
-if 'current_value' not in st.session_state:
-    st.session_state.current_value = 0
-if 'target_value' not in st.session_state:
-    st.session_state.target_value = required_training[
-        st.session_state.current_stage
-    ][st.session_state.current_rank]
+if 'current_value_w10k' not in st.session_state:
+    st.session_state.current_value_w10k = 0
+if 'target_value_w10k' not in st.session_state:
+    # 初期は現在境地・段位の必要ポイントを万単位に変換
+    raw = required_training[st.session_state.current_stage][st.session_state.current_rank]
+    st.session_state.target_value_w10k = raw // 10000
 
-# ── 境地・段位が変わったら目標値を更新 ──
+# ── 境地・段位が変わったら目標値(万)を更新 ──
 def update_target():
-    stage = st.session_state.current_stage
-    rank  = st.session_state.current_rank
-    st.session_state.target_value = required_training[stage][rank]
+    raw = required_training[
+        st.session_state.current_stage
+    ][
+        st.session_state.current_rank
+    ]
+    st.session_state.target_value_w10k = raw // 10000
 
 with st.expander("入力項目", expanded=True):
     # 境地選択
@@ -76,40 +79,33 @@ with st.expander("入力項目", expanded=True):
         key="current_rank",
         on_change=update_target
     )
-    # 現在の修練値（ポイント単位）
+
+    # 現在の修練値（万単位）
     st.number_input(
-        "現在の修練値",
+        "現在の修練値（万）",
         min_value=0,
-        value=st.session_state.current_value,
+        value=st.session_state.current_value_w10k,
         step=1,
-        key="current_value"
+        key="current_value_w10k"
     )
-    # 目標修練値（ポイント単位。境地/段位選択で自動更新）
+
+    # 目標修練値（万単位、自動更新）
     st.number_input(
-        "目標修練値",
+        "目標修練値（万）",
         min_value=0,
-        value=st.session_state.target_value,
+        value=st.session_state.target_value_w10k,
         step=1,
-        key="target_value"
+        key="target_value_w10k"
     )
 
 # ── シミュレーション用定数 ──
-cycle_time   = 8            # 1周天に要する秒数
-herb_interval = 15 * 60     # 仙草入手間隔（秒）
-herb_cycles  = 40           # 仙草1個あたりの補助周天数
-
-# 霊峰バフパターン
-buff_options = {"30%": 0.30, "20%": 0.20, "10%": 0.10, "3%": 0.03}
+cycle_time    = 8            # 1周天に要する秒数
+herb_interval = 15 * 60      # 仙草入手間隔（秒）
+herb_cycles   = 40           # 仙草1個あたりの補助周天数
+buff_options  = {"30%": 0.30, "20%": 0.20, "10%": 0.10, "3%": 0.03}
 
 # ── シミュレーション関数 ──
 def simulate_time(remaining, base_speed, buff):
-    """
-    remaining : 必要修練ポイント
-    base_speed: 周天あたり獲得ポイント
-    buff      : 聖峰バフ率
-    戻り値    : (所要秒数, 手動修練ポイント, 仙草修練ポイント)
-    """
-    # 初期推定
     factor = base_speed * ((1 + buff) / cycle_time + herb_cycles / herb_interval)
     t_est = int(remaining / factor)
     t = max(t_est, 0)
@@ -117,7 +113,7 @@ def simulate_time(remaining, base_speed, buff):
         manual_pts = (t / cycle_time) * base_speed * (1 + buff)
         herb_pts   = (t // herb_interval) * herb_cycles * base_speed
         if manual_pts + herb_pts >= remaining:
-            # 1秒前を確認して最小tを探す
+            # 1秒前チェック
             while t > 0:
                 t_minus = t - 1
                 m2 = (t_minus / cycle_time) * base_speed * (1 + buff)
@@ -130,18 +126,19 @@ def simulate_time(remaining, base_speed, buff):
 
 # ── シミュレーション実行 ──
 if st.button("シミュレーション開始"):
-    current = st.session_state.current_value
-    target  = st.session_state.target_value
+    # 万単位→ポイント単位に変換
+    current = st.session_state.current_value_w10k * 10000
+    target  = st.session_state.target_value_w10k * 10000
     remaining = target - current
 
     if remaining <= 0:
         st.success("既に目標修練値に達しています。")
     else:
-        # 基本速度取得
         base_speed = training_speeds[
             st.session_state.current_stage
-        ][st.session_state.current_rank]
-        # 現在時刻（JST）
+        ][
+            st.session_state.current_rank
+        ]
         now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
 
         results = []
@@ -154,10 +151,10 @@ if st.button("シミュレーション開始"):
             results.append({
                 "バフ":       label,
                 "予想到達時刻": finish.strftime("%Y-%m-%d %H:%M"),
-                "所要時間":   f"{hours} 時間 {mins} 分",
-                "手動修練(ポイント)": f"{int(manual_pts)}",
-                "仙草修練(ポイント)": f"{int(herb_pts)}",
-                "合計修練(ポイント)": f"{int(manual_pts + herb_pts)}",
+                "所要時間":   f"{hours}h {mins}m",
+                "手動修練(万)":   f"{int(manual_pts)//10000}",
+                "仙草修練(万)":   f"{int(herb_pts)//10000}",
+                "合計修練(万)":   f"{int((manual_pts+herb_pts))//10000}",
             })
 
         df = pd.DataFrame(results)
