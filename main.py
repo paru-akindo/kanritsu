@@ -129,7 +129,7 @@ if st.button("シミュレーション開始"):
         })
 
     df_unused = pd.DataFrame(rows_unused)
-    st.markdown("## 未使用シナリオ")
+    st.markdown("## 未使用")
     st.table(df_unused)
 
     # アイテム使用シナリオ
@@ -150,5 +150,5 @@ if st.button("シミュレーション開始"):
             })
 
         df_used = pd.DataFrame(rows_used)
-        st.markdown(f"## {used_items}個使用シナリオ")
+        st.markdown(f"## {used_items}個使用")
         st.table(df_used)
